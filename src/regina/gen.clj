@@ -5,6 +5,21 @@
   [state]
   (rand-nth (keys state)))
 
+(defn r
+  "Shorthand read constructor."
+  [k v]
+  {:f :read, :k k, :v v})
+
+(defn w
+  "Shorthand write constructor."
+  [k v]
+  {:f :write, :k k, :v v})
+
+(defn t
+  "Generate transaction from seq of ops."
+  [& ops]
+  {:ops ops})
+
 (defn read-op
   "Constructs a random read op on state. Returns [state', read-op]"
   [state]
