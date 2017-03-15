@@ -9,7 +9,10 @@
             [clojure.pprint :refer [pprint]])
   (:import (java.io File
                     BufferedReader
-                    StringReader)))
+                    StringReader)
+           (regina.constraint Solution)
+           (java.util.function BinaryOperator)
+           (io.lacuna.bifurcan LinearMap)))
 
 (defn write-bool!
   "Write a boolean var definition like '(bool :x) to a flatzinc outputstream.
@@ -20,7 +23,8 @@
   (.write os (name v))
   (if real?
     (.write os " :: output_var;\n")
-    (.write os " :: var_is_introduced;\n")))
+    ; TODO: use is_defined_var and defines_var
+    (.write os " :: var_is_introduced :: is_defined_var;\n")))
 
 (defn write-int!
   "Write an integer var definition like '(in :x 0 5) to a flatzinc
@@ -36,8 +40,10 @@
 
 (defn write-constraint!
   "Write a constraint to the given outputstream, calling f with args."
-  [os [f & args]]
-  (assert f)
+  [os [f args annotations]]
+  (assert f (str "No function? " f))
+  (assert (coll? args) (str "No args? " f " " args " " annotations))
+
   (.write os "constraint ")
   (.write os (name f))
   (.write os "(")
@@ -48,8 +54,25 @@
                    (pr-str a))))
     (when-let [more (next args)]
       (.write os ", ")
-      (recur (next args))))
-  (.write os ");\n"))
+      (recur more)))
+  (.write os ")")
+
+  (loop [anns annotations]
+    (when-let [ann (first anns)]
+      (.write os " :: ")
+      (.write os (name (first ann)))
+      (when (< 1 (count ann))
+        (.write os "(")
+        ; Args
+        (loop [a (next ann)]
+          (when a
+            (.write os (name (first a)))
+            (when-let [more (next a)]
+              (.write os ", ")
+              (recur more))))
+        (.write os ")"))))
+
+  (.write os ";\n"))
 
 (defn write-constraints!
   "Write a series of constraints to the given outputstream."
@@ -58,50 +81,59 @@
     (write-constraint! os c)))
 
 (defn mapping
-  "Take a tree, and a variable offset n. Compute a map of terms to temporary
-  variables."
+  "Take a tree, and a variable offset n. Compute [a new index n', a map of terms
+  to temporary variables.] Mapping is a mutable LinearMap for performance."
   [tree n]
   (->> tree
-       (tree-seq seq? next)
-       (filter seq?)
+       (tree-seq sequential? next)
+       (filter sequential?)
        (reduce (fn [[i m] [type & children :as tree]]
                  [(inc i)
-                  (assoc m tree (keyword (str "_fz" (+ n i))))])
-               [0 {}])
-       second))
+                  (.put m tree (keyword (str "_fz" (+ n i))))])
+               [0 (LinearMap.)])))
 
 (defn direct-constraint
-  "Compute a top-level flatzinc constraint. Nil if we don't know how to handle
-  this."
+  "Compute a sequence of top-level flatzinc constraints from a given constraint
+  expression. Nil if we don't know how to handle this."
   [tree]
   (cond ; Plain old boolean
         (keyword? tree)
-        [:bool_eq tree true]
+        [[:bool_eq [tree true]]]
 
         ; An expression we know how to handle directly?
         (seq tree)
         (let [[type a b] tree]
           (condp = type
+            'distinct (for [a (next tree)
+                            b (next tree)
+                            :when (not= a b)]
+                        [:int_ne [a b]])
             'not (if (keyword? a)
-                   [:bool_eq a false])
-            '<   [:int_lt a b]
-            '<=  [:int_le a b]
+                   [[:bool_eq [a false]]])
+            '<   [[:int_lt [a b]]]
+            '<=  [[:int_le [a b]]]
             nil))))
 
 (defn mapping-constraints
   "Generates constraints from a mapping."
   [mapping]
-  (map (fn [[tree v]]
-         (let [[type & args] tree
+  (assert (= (distinct (map #(.value %) mapping))
+             (vec (map #(.value %) mapping)))
+          (str "Mapping without distinct variable names:\n"
+               (with-out-str (pprint mapping))))
+  (map (fn [entry]
+         (let [tree (.key entry)
+               v    (.value entry)
+               [type & args] tree
                ; Replace child terms with their variables
-               args (map (fn [a] (get mapping a a)) args)
+               args (map (fn [a] (.get mapping a a)) args)
                [a b] args]
            (condp = type
-             '<   [:int_lt_reif a b v]
-             '<=  [:int_le_reif a b v]
-             'and [:bool_and    a b v]
-             'or  [:bool_or     a b v]
-             'not [:bool_not    a v]
+             '<   [:int_lt_reif [a b v] [[:defines_var v]]]
+             '<=  [:int_le_reif [a b v] [[:defines_var v]]]
+             'and [:bool_and    [a b v] [[:defines_var v]]]
+             'or  [:bool_or     [a b v] [[:defines_var v]]]
+             'not [:bool_not    [a v]   [[:defines_var v]]]
              true (throw (IllegalArgumentException.
                            (str "What's a " (pr-str tree) "?"))))))
        mapping))
@@ -117,26 +149,30 @@
         ; Compute global mappings
         mapping (->> ors
                      (remove direct-constraint)
-                     (reduce (fn [[i m] tree]
-                               (let [mapping (mapping tree i)]
-                                 [(+ i (count mapping))
-                                  (merge mapping m)]))
-                             [0 {}])
+                     (reduce (fn merge-mappings
+                               [[i m] tree]
+                               (let [[n mapping] (mapping tree i)]
+                                 [(+ i n) (.merge mapping m
+                                                  (reify BinaryOperator
+                                                    (apply [_ a b]
+                                                      a)))]))
+                             [0 (LinearMap.)])
                      second)]
-    (assert (distinct? (vals mapping)))
-    {:vars (->> (vals mapping)
-                (map (partial list 'bool)))
+    {:vars (map (fn [entry] ['bool (.value entry)]) mapping)
      :constraints (->> ors
-                       (map (fn [o]
-                              (or (direct-constraint o)
-                                  (direct-constraint (get mapping o))
-                                  (throw (IllegalStateException.
-                                           (str "Don't know how to generate constraint for "
-                                                (pr-str o) "\ngiven mapping\n"
-                                                (with-out-str
-                                                  (pprint mapping))
-                                                "\nover top-level constraints\n"
-                                                (pr-str ors)))))))
+                       (mapcat
+                         (fn compute-constraints [o]
+                           (or (direct-constraint o)
+                               (direct-constraint (.get mapping o nil))
+                               (throw (IllegalStateException.
+                                        (str "Don't know how to generate constraint for "
+                                             (pr-str o) "\ngiven value "
+                                             (pr-str (.get mapping o nil))
+                                             " from mapping\n"
+                                             (with-out-str
+                                               (pprint mapping))
+                                             "\nover top-level constraints\n"
+                                             (pr-str ors)))))))
 
                        (concat (mapping-constraints mapping)))}))
 
@@ -145,14 +181,17 @@
   converts it to CNF via tseitin, and reifies logic vars as appropriate."
   [os tree]
   (let [; First, convert the tree to CNF
-        {:keys [tree new-vars]} (c/tseitin+ (c/simplify tree))
-        new-vars (set (map (partial list 'bool) new-vars))
+;        {:keys [tree new-vars]} (c/tseitin+ (c/simplify tree))
+;        new-vars (set (map (partial vector 'bool) new-vars))
+
+        tree (c/simplify tree)
+        new-vars #{}
 
         ; Force tree to contain an and
-        tree (if (and (seq? tree)
+        tree (if (and (sequential? tree)
                       (= 'and (first tree)))
                tree
-               (list 'and tree))
+               ['and tree])
 
 ;        _ (prn :tree)
 ;        _ (pprint tree)
@@ -163,7 +202,7 @@
         {:keys [ints
                 bools
                 constraints]} (group-by (fn [t]
-                                          (if (seq? t)
+                                          (if (sequential? t)
                                             (condp = (first t)
                                               'in   :ints
                                               'bool :bools
@@ -258,13 +297,13 @@
       (with-open [w (io/writer file)]
         (write-flatzinc! w tree))
 
-      (let [res (sh "fzn-gecode" "-n" "0" "-p" "0" (.getCanonicalPath file))]
+      (let [res (sh "fzn-gecode" "-n" (str n) "-p" "0" (.getCanonicalPath file))]
         (assert (zero? (:exit res))
-                (str "fzn-gecode returned non-zero exit status "
-                     (:exit res)".\nStderr:\n"
-                     (:err res) "\nStdout:\n"
-                     (:out res) "\nGenerated flatzinc was:\n"
-                     (flatzinc-str tree)))
+                (str "fzn-gecode returned non-zero exit status " (:exit res)
+                     ".\nStderr:\n" (:err res)
+                     "\nStdout:\n" (:out res)
+                     "\nConstraint tree was\n" (with-out-str (pprint tree))
+                     "\nGenerated flatzinc was:\n" (flatzinc-str tree)))
              (parse-solutions-str (:out res)))
       (finally
         (.delete file)))))
@@ -278,3 +317,10 @@
   "Solve for all solutions."
   [tree]
   (solve tree 0))
+
+(defn flatzinc
+  "Flatzinc gecode based solver."
+  []
+  (reify Solution
+    (solution [_ c]
+      (solution c))))

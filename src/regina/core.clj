@@ -109,6 +109,12 @@
   (doseq [txn history]
     (println (txn-str txn))))
 
+(defn tiv
+  "Transaction index variable for transaction index i in the given constraint
+  system."
+  [c i]
+  (c/v c (str "t" i)))
+
 ;; Internal consistency
 
 (defn check-int
@@ -262,9 +268,9 @@
   constructs a constraint ensuring that read is satisfiable."
   [history s txn [k v :as r]]
   (let [[W O] (priors history (:i txn) r)
-        t (c/v s (:i txn))
-        W (map #(c/v s %) W)
-        O (map #(c/v s %) O)]
+        t (tiv s (:i txn))
+        W (map #(tiv s %) W)
+        O (map #(tiv s %) O)]
     (assert (seq W) "external read unsatisfied") ; Sanity check
     (c/or* s (for [w W]
                (c/and* s (cons (c/< s w t)
@@ -290,7 +296,7 @@
   [history s]
   (->> history
        :txns
-       (map (comp (partial c/v s) :i))
+       (map (comp (partial tiv s) :i))
        (c/distinct s)))
 
 (defn index-constraints
@@ -300,31 +306,29 @@
   (->> history
        :txns
        (map (fn [txn]
-             (c/in s (c/v s (:i txn)) 0 (dec (count (:txns history))))))
+             (c/in s (tiv s (:i txn)) 0 (dec (count (:txns history))))))
        (c/and* s)))
 
 (defn history-constraint
   "Given a history and a constraint system, constructs a constraint ensuring
   the history is serializable."
   [history s]
-  (c/tseitin
-    (c/simplify
-      (c/and* s [(index-constraints history s)
-                 (distinct-constraint history s)
-                 (txn-constraints history s)]))))
+  (c/simplify
+    (c/and* s [(index-constraints history s)
+               (distinct-constraint history s)
+               (txn-constraints history s)])))
 
 (defn check-ext-history
   "Check history for external consistency."
   [history s]
   (let [constraint (history-constraint history (c/clojure))
-        constraint (c/clojure-> s constraint)
         soln       (c/solution s constraint)]
     ; Map solution back to history
     (if soln
       (assoc history :solution
              (let [var-order    (map key (sort-by val soln))
                    txns-by-vars (->> (:txns history)
-                                     (map (fn [txn] [(c/v s (:i txn)) txn]))
+                                     (map (fn [txn] [(tiv (c/clojure) (:i txn)) txn]))
                                      (into {}))]
                (map txns-by-vars var-order)))
       (assoc history :error {:type :no-ext-solution}))))

@@ -11,7 +11,7 @@
             [regina.constraint-test :as ct]
             [regina.constraint.flatzinc :refer :all]))
 
-(def n 1) ; test.spec iters
+(def n 100) ; test.spec iters
 
 (deftest flatzinc-test
   (is (= (str "\nvar bool: x :: output_var;\n"
@@ -35,13 +35,13 @@
   (is (= (str "var 0..2: a :: output_var;\n"
               "var 0..2: b :: output_var;\n"
               "\n\n"
-              "var bool: _fz0 :: var_is_introduced;\n"
-              "var bool: _fz1 :: var_is_introduced;\n"
-              "var bool: _fz2 :: var_is_introduced;\n"
+              "var bool: _fz0 :: var_is_introduced :: is_defined_var;\n"
+              "var bool: _fz1 :: var_is_introduced :: is_defined_var;\n"
+              "var bool: _fz2 :: var_is_introduced :: is_defined_var;\n"
               "\n"
-              "constraint bool_or(_fz1, _fz2, _fz0);\n"
-              "constraint int_lt_reif(a, b, _fz1);\n"
-              "constraint int_lt_reif(b, a, _fz2);\n"
+              "constraint bool_or(_fz1, _fz2, _fz0) :: defines_var(_fz0);\n"
+              "constraint int_lt_reif(a, b, _fz1) :: defines_var(_fz1);\n"
+              "constraint int_lt_reif(b, a, _fz2) :: defines_var(_fz2);\n"
               "constraint bool_eq(_fz0, true);\n"
               "\n"
               "solve satisfy;\n")
@@ -62,7 +62,7 @@
                                    (< :b :a))))))))
 
 (defspec tseitin-spec
-  1000
+  n
   (prop/for-all [e ct/gen-full-expr]
                 (let [brute-solutions (ct/solutions e)
                       fz-solutions    (solutions e)]

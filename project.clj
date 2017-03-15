@@ -5,6 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [potemkin "0.4.3"]
+                 [bifurcan "0.1.0-SNAPSHOT"]
                  [loco "0.3.1"]]
   :profiles {:dev {:dependencies [[org.clojure/math.numeric-tower "0.0.4"]
                                   [org.clojure/test.check "0.9.1-SNAPSHOT"]]}}

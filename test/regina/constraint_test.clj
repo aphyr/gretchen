@@ -21,8 +21,8 @@
   "Given a constraint tree, what variable declarations are in it?"
   [tree]
   (->> tree
-       (tree-seq seq? next)
-       (filter seq?)
+       (tree-seq sequential? next)
+       (filter sequential?)
        (filter (comp #{'in 'bool} first))
        (into #{})))
 
@@ -30,7 +30,7 @@
   "Given a constraint tree, what variables (keywords) are in it?"
   [tree]
   (->> tree
-       (tree-seq seq? next)
+       (tree-seq sequential? next)
        (filter keyword?)
        (into (sorted-set))))
 
@@ -40,7 +40,7 @@
 (def gen-int-relation
   (->> (gen/tuple (gen/elements ['< '<=]) gen-int-var gen-int-var)
        (gen/such-that (fn [t] (= 3 (count t))))
-       (gen/fmap (partial apply list))))
+       (gen/fmap (partial apply vector))))
 
 (def gen-bool-terminal (gen/one-of [gen-bool-var
                                     gen-int-relation]))
@@ -49,9 +49,9 @@
 
 (defn gen-compound
   [g]
-  (gen/one-of [(gen/fmap (partial list 'not) g)
-               (gen/fmap (partial cons 'and) (gen/tuple g g))
-               (gen/fmap (partial cons 'or) (gen/tuple g g))]))
+  (gen/one-of [(gen/fmap (partial vector 'not) g)
+               (gen/fmap (comp vec (partial cons 'and)) (gen/tuple g g))
+               (gen/fmap (comp vec (partial cons 'or)) (gen/tuple g g))]))
 
 (defn add-declarations
   "Add variable declarations to a generated expression."
@@ -60,8 +60,8 @@
          (->> (vars tree)
               (map (fn [v]
                      (if (bool-vars v)
-                       (list 'bool v)
-                       (list 'in v 0 2)))))))
+                       ['bool v]
+                       ['in v 0 2]))))))
 
 (def gen-bool-expr
   "Basic boolean expressions"
@@ -157,7 +157,7 @@
         (get assignment tree)
 
         ; Recurse
-        (seq? tree)
+        (sequential? tree)
         (let [[type & children] tree]
           (condp = type
             'bool (let [v (get assignment (first children))]
@@ -200,15 +200,16 @@
             (get ass form)
 
             ; Turn declarations into clojure predicates
-            (seq? form)
-            (condp = (first form)
-              'in (list '<=
-                        (nth form 2)
-                        (second form)
-                        (nth form 3))
-              'bool (or (true? (second form))
-                        (false? (second form)))
-              form)
+            (sequential? form)
+            (let [form (seq form)] ; Map back to code
+              (condp = (first form)
+                'in (list '<=
+                          (nth form 2)
+                          (second form)
+                          (nth form 3))
+                'bool (or (true? (second form))
+                          (false? (second form)))
+                form))
 
             true
             form))
@@ -224,12 +225,19 @@
                                     :i gen/int
                                     :j gen/int
                                     :k gen/int)]
-                (or (= (solution? expr ass)
-                       (eval (clojure-eval-able expr ass)))
-                    (prn :ass ass)
-                    (prn :expr (solution? expr ass) expr)
-                    (prn :clj (eval (clojure-eval-able expr ass))
-                         (clojure-eval-able expr ass)))))
+                (try
+                  (or (= (solution? expr ass)
+                         (eval (clojure-eval-able expr ass)))
+                      (prn :ass ass)
+                      (prn :expr (solution? expr ass) expr)
+                      (prn :clj (eval (clojure-eval-able expr ass))
+                           (clojure-eval-able expr ass)))
+                  (catch Throwable t
+                      (prn :ass ass)
+                      (prn :expr (solution? expr ass) expr)
+                      (prn :clj (clojure-eval-able expr ass))
+                      (prn :clj-res (eval (clojure-eval-able expr ass)))
+                      (throw t)))))
 
 (defn solutions
   "Given a constraint tree, finds all maps of variables to boolean values which
@@ -285,15 +293,15 @@
 ; See http://www.decision-procedures.org/handouts/Tseitin70.pdf
 ; See http://fmv.jku.at/biere/talks/Biere-VTSA12-talk.pdf
 (deftest and-terms-test
-  (is (= '[(or x (not y) (not z))
-           (or (not x) y)
-           (or (not x) z)]
+  (is (= '[(or (not x) y)
+           (or (not x) z)
+           (or x (not y) (not z))]
          (c/and-terms 'x '(y z)))))
 
 (deftest or-terms-test
-  (is (= '[(or (not x) y z)
-           (or x (not y))
-           (or x (not z))]
+  (is (= '[(or x (not y))
+           (or x (not z))
+           (or (not x) y z)]
          (c/or-terms 'x '(y z)))))
 
 (deftest not-terms-test
@@ -344,13 +352,13 @@
                  ; Top level constraint
                  :_t0
                  ; _0: (or :a :v1)
-                 (or (not :_t0) :a :_t1)
                  (or :_t0 (not :a))
                  (or :_t0 (not :_t1))
+                 (or (not :_t0) :a :_t1)
                  ; _1: (and :b :c)
-                 (or :_t1 (not :b) (not :c))
                  (or (not :_t1) :b)
-                 (or (not :_t1) :c))
+                 (or (not :_t1) :c)
+                 (or :_t1 (not :b) (not :c)))
            (tseitin '(or :a (and :b :c))))))
 
   (let [t '(or :a (and :b :c))]

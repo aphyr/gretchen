@@ -75,14 +75,14 @@
     (t    [s]     true)
     (f    [s]     false)
     (v    [s i]   (keyword (str i)))
-    (ands [s as]  (cons 'and as))
-    (ors  [s as]  (cons 'or as))
-    (not  [s a]   (list 'not a))
-    (less_than          [s a b] (list '< a b))
-    (less_than_equal_to [s a b] (list '<= a b))
-    (bool               [s v]         (list 'bool v))
-    (in                 [s v min max] (list 'in v min max))
-    (distinct           [s vs]        (apply list 'distinct vs))))
+    (ands [s as]  (vec (cons 'and as)))
+    (ors  [s as]  (vec (cons 'or as)))
+    (not  [s a]   ['not a])
+    (less_than          [s a b] ['< a b])
+    (less_than_equal_to [s a b] ['<= a b])
+    (bool               [s v]         ['bool v])
+    (in                 [s v min max] ['in v min max])
+    (distinct           [s vs]        (vec (cons 'distinct vs)))))
 
 (defn clojure->
   "Convert a clojure constraint c to the given constraint system s."
@@ -91,7 +91,7 @@
     (= true c)   (t s)
     (= false c)  (f s)
     (keyword? c) (v s (name c))
-    (seq? c) (let [[type & children] c
+    (sequential? c) (let [[type & children] c
                    [child :as children] (map (partial clojure-> s) children)]
                (condp = type
                  'and  (ands s children)
@@ -108,12 +108,12 @@
   "Takes a Clojure tree and unfurls n-arity relations to binary form."
   [tree]
   (walk/postwalk (fn [tree]
-                   (if (c/and (seq? tree)
+                   (if (c/and (sequential? tree)
                               (c/or (= 'and (first tree))
                                     (= 'or  (first tree))
                                     (= '<   (first tree))
                                     (= '<=  (first tree))))
-                     (reduce (partial list (first tree)) (next tree))
+                     (reduce (partial vector (first tree)) (next tree))
                      tree))
                  tree))
 
@@ -121,16 +121,16 @@
   "Simplify a Clojure constraint, in one pass."
   [c]
   ; Terminals
-  (if-not (seq? c)
+  (if-not (sequential? c)
     c ; Can't optimize terminals
     (let [[type & children] c
           children (map simplify-1 children)  ; Recursively simplify
-          c (cons type children)]             ; Rebuild expression
+          c (vec (cons type children))]       ; Rebuild expression
       (condp = type
         'and (condp = (count children)
                0 true
                1 (second c)
-               (seq (reduce (fn [as a]
+               (reduce (fn [as a]
                               (cond ; Short-circuit false
                                     (false? a)
                                     false
@@ -140,17 +140,17 @@
                                     as
 
                                     ; Flatten nested and
-                                    (c/and (seq? a) (= 'and (first a)))
+                                    (c/and (sequential? a) (= 'and (first a)))
                                     (into as (next a))
 
                                     :else
                                     (conj as a)))
                             ['and]
-                            (c/distinct children))))
+                            (c/distinct children)))
         'or (condp = (count children)
               0 true
               1 (second c)
-              (seq (reduce (fn [as a]
+              (reduce (fn [as a]
                              (cond ; Short-circuit true
                                    (true? a)
                                    true
@@ -160,20 +160,20 @@
                                    as
 
                                    ; Flatten nested and
-                                   (c/and (seq? a) (= 'or (first a)))
+                                   (c/and (sequential? a) (= 'or (first a)))
                                    (into as (next a))
 
                                    :else
                                    (conj as a)))
                            ['or]
-                           (c/distinct children))))
+                           (c/distinct children)))
         'not (let [child (first children)]
                (cond ; Constant negation
                      (true? child) false
                      (false? child) true
 
                      ; Double negation
-                     (c/and (seq? child) (= 'not (first child)))
+                     (c/and (sequential? child) (= 'not (first child)))
                      (second child)
 
                      ; Pass through
@@ -207,8 +207,8 @@
   considered literals, and of course 'nots are as well."
   [tree]
   (->> tree
-       (tree-seq seq? next)
-       (filter seq?)
+       (tree-seq sequential? next)
+       (filter sequential?)
        (map first)
        (not-any? #{'and 'or})))
 
@@ -237,7 +237,7 @@
   [tree n]
   (->>
     tree
-    (tree-seq seq? next)
+    (tree-seq sequential? next)
     (remove cnf-literal?)
     (reduce
       (fn [[i m] [type & children :as tree]]
@@ -256,23 +256,23 @@
   and, returns a seq of disjunctions for the tseitin expansion of that op"
   [v args]
   ; x <-> (and y z)  <=>  (and (or x (not y)) (or x (not z)) (or (not x) y z))
-  (cons (apply list 'or v (map (partial list 'not) args))
-        (map (partial list 'or (list 'not v)) args)))
+  (conj (mapv (partial vector 'or ['not v]) args)
+        (apply vector 'or v (map (partial vector 'not) args))))
 
 (defn or-terms
   "Given a var representing an or expression, and a sequence of vars in the or,
   returns a seq of disjunctions for the tseitin expansion of that op."
   [v args]
   ; x <-> (or y z)  <=>  (and (or x (not y)) (or x (not z)) (or (not x) y z))
-  (cons (apply list 'or (list 'not v) args)
-        (map (fn invert [a] (list 'or v (list 'not a))) args)))
+  (conj (mapv (fn invert [a] ['or v ['not a]]) args)
+        (apply vector 'or ['not v] args)))
 
 (defn not-terms
   "Given a var representing a not expression, and the negated var, returns a seq of disjunctions for the tseitin expansion of that op."
   [v a]
   ; x <-> (not y)  <=>  (and (or (not x) (not y)) (or x y))
-  [(list 'or v a)
-   (list 'or (list 'not v) (list 'not a))])
+  [['or v a]
+   ['or ['not v] ['not a]]])
 
 (defn flatten-ops
   "Takes a map of operations to vars and constructs a sequence of disjunctions
@@ -281,7 +281,7 @@
   (mapcat (fn [[op v]]
             (let [[type & args] op
                   ; Replace child terms with their tseitin variables
-                  args (if (seq? args)
+                  args (if (sequential? args)
                          (map (fn [a] (get ops-to-vars a a)) args)
                          args)]
               (condp = type
@@ -329,23 +329,23 @@
           tseitin-constraints   (flatten-ops mappings)
           ; And global constraints for the top-level terms themselves
           top-level-constraints (map mappings nonliterals)]
-      {:tree (simplify (cons 'and (concat (map (partial list 'bool)
-                                               (vals mappings))
-                                          top-level-constraints
-                                          literals
-                                          tseitin-constraints)))
+      {:tree (simplify (vec (cons 'and (concat (map (partial vector 'bool)
+                                                    (vals mappings))
+                                               top-level-constraints
+                                               literals
+                                               tseitin-constraints))))
        :new-vars (set (vals mappings))})
 
     ; General case: compute full tseitin vars over the top-level tree
     true
     (let [mappings (ops-to-vars tree 0)]
       {:tree (simplify
-               (cons 'and
-                     (concat
-                       (map (partial list 'bool)  ; New booleans
-                            (vals mappings))
-                       (list (get mappings tree)) ; Top-level constraint
-                       (flatten-ops mappings))))  ; Sub-expression constraints
+               (vec (cons 'and
+                          (concat
+                            (map (partial vector 'bool)  ; New booleans
+                                 (vals mappings))
+                            [(get mappings tree)]       ; Top-level constraint
+                            (flatten-ops mappings)))))  ; Sub-expressions
       :new-vars (set (vals mappings))})))
 
 (defn tseitin

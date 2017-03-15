@@ -31,7 +31,7 @@
   "Constructs a random write op on state. Returns [state', write-op]"
   [state]
   (let [k (rand-key state)
-        v (rand-int 128)]
+        v (rand-int 100)]
     [(assoc state k v), {:f :write, :k k, :v v}]))
 
 (defn op
@@ -42,7 +42,7 @@
 (defn txn
   "Constructs a random transaction on state. Returns [state', txn]."
   [state]
-  (loop [i      (rand-int 5)
+  (loop [i      (inc (rand-int 4))
          state  state
          ops    []]
     (if (zero? i)

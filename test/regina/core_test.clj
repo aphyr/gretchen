@@ -3,6 +3,7 @@
             [clojure.pprint :refer [pprint]]
             [regina.core :refer :all]
             [regina.constraint :as c]
+            [regina.constraint.flatzinc :refer [flatzinc]]
             [regina.gen :as gen :refer [t r w]]
             [loco.core :as loco]))
 
@@ -14,22 +15,17 @@
 
 (deftest constraint-test
   (is (= '(and
-            (in :0 0 2)
-            (in :1 0 2)
-            (in :2 0 2)
-            (distinct :0 :1 :2)
-            (< :0 :1)
-            (or (< :2 :0) (< :1 :2)))
+            (in :t0 0 2)
+            (in :t1 0 2)
+            (in :t2 0 2)
+            (distinct :t0 :t1 :t2)
+            (< :t0 :t1)
+            (or (< :t2 :t0) (< :t1 :t2)))
          (-> {:initial {:x 0}       ; t0
               :txns [(t (r :x 0))   ; t1
                      (t (w :x 1))]} ; t2
              prepare-history
              (history-constraint (c/clojure))))))
-
-(deftest perf-test
-  (let [h (gen/history 50 {:x 0 :y 0 :z 0})]
-    (pprint (history-constraint (prepare-history h) (c/clojure)))
-    (pprint (check h (c/loco)))))
 
 (deftest check-test
   (testing "wx0, rx0, wx1"
@@ -39,7 +35,7 @@
            (:solution (check {:initial {:x 0}       ; t0
                               :txns [(t (r :x 0))   ; t1
                                      (t (w :x 1))]} ; t2
-                             (c/loco))))))
+                             (flatzinc))))))
 
   (testing "P0 Dirty Write"
     ; A value pops into appearance out of nowhere (e.g. written by an aborted
@@ -50,7 +46,7 @@
                      :v 1}]}
            (:error (check {:initial {:x 0}
                            :txns [(t (r :x 1))]}
-                          (c/loco))))))
+                          (flatzinc))))))
 
   (testing "P4 Lost Update"
     ; Two read-modify-write increments
@@ -58,7 +54,7 @@
            (:error (check {:initial {:x 0}
                            :txns [(t (r :x 0) (w :x 1))
                                   (t (r :x 0) (w :x 1))]}
-                          (c/loco))))))
+                          (flatzinc))))))
 
   ; See Berenson, et al 1995, "A Critique of ANSI SQL Isolation Levels"
   ; https://arxiv.org/pdf/cs/0701157.pdf
@@ -67,11 +63,21 @@
           t1 (t (r :x 0) (r :y 1))
           t2 (t (w :x 1) (w :y 1))]
       (is (= {:type :no-ext-solution}
-             (:error (check {:initial init :txns [t1 t2]} (c/loco)))))))
+             (:error (check {:initial init :txns [t1 t2]} (flatzinc)))))))
 
   (testing "A5B Write Skew"
     (let [init {:x 0, :y 0}
           t1 (t (r :x 0) (r :y 0) (w :x 1))
           t2 (t (r :x 0) (r :y 0) (w :y 2))]
       (is (= {:type :no-ext-solution}
-             (:error (check {:initial init :txns [t1 t2]} (c/loco))))))))
+             (:error (check {:initial init :txns [t1 t2]} (flatzinc))))))))
+
+(deftest perf-test
+  (let [h (gen/history 100 {:x 0 :y 0 :z 0})]
+    (prn)
+    (println "---------------------------------------------")
+    (prn)
+    (pprint (history-constraint (prepare-history h) (c/clojure)))
+    (prn)
+    (prn :solution)
+    (pprint (check h (flatzinc)))))
