@@ -25,7 +25,7 @@
               :txns [(t (r :x 0))   ; t1
                      (t (w :x 1))]} ; t2
              prepare-history
-             (history-constraint (c/clojure))))))
+             (history-constraint)))))
 
 (deftest check-test
   (testing "wx0, rx0, wx1"
@@ -73,11 +73,11 @@
              (:error (check {:initial init :txns [t1 t2]} (flatzinc))))))))
 
 (deftest perf-test
-  (let [h (gen/history 100 {:x 0 :y 0 :z 0})]
+  (let [h (gen/history 50 {:x 0 :y 0 :z 0})]
     (prn)
     (println "---------------------------------------------")
     (prn)
-    (pprint (history-constraint (prepare-history h) (c/clojure)))
+    (pprint (history-constraint (prepare-history h)))
     (prn)
     (prn :solution)
     (pprint (check h (flatzinc)))))

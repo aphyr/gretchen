@@ -110,10 +110,9 @@
     (println (txn-str txn))))
 
 (defn tiv
-  "Transaction index variable for transaction index i in the given constraint
-  system."
-  [c i]
-  (c/v c (str "t" i)))
+  "Transaction index variable for transaction index i"
+  [i]
+  (c/v (str "t" i)))
 
 ;; Internal consistency
 
@@ -266,69 +265,69 @@
 (defn prior-constraint
   "Given a history, a constraint system, a transaction, and its read of [k v],
   constructs a constraint ensuring that read is satisfiable."
-  [history s txn [k v :as r]]
+  [history txn [k v :as r]]
   (let [[W O] (priors history (:i txn) r)
-        t (tiv s (:i txn))
-        W (map #(tiv s %) W)
-        O (map #(tiv s %) O)]
+        t (tiv (:i txn))
+        W (map tiv W)
+        O (map tiv O)]
     (assert (seq W) "external read unsatisfied") ; Sanity check
-    (c/or* s (for [w W]
-               (c/and* s (cons (c/< s w t)
-                               (for [o O]
-                                 (c/or s (c/< s o w) (c/< s t o)))))))))
+    (c/or* (for [w W]
+             (c/and* (cons (c/< w t)
+                           (for [o O]
+                             (c/or (c/< o w) (c/< t o)))))))))
 
 (defn txn-constraint
   "Given a history, a constraint system, and transaction, constructs a
   constraint ensuring the transaction's external consistency."
-  [history s txn]
-  (c/and* s (for [r (ext-reads txn)]
-              (prior-constraint history s txn r))))
+  [history txn]
+  (c/and* (for [r (ext-reads txn)]
+              (prior-constraint history txn r))))
 
 (defn txn-constraints
   "Given a history and a constraint system, generates a constraint for all
   txns."
-  [history s]
-  (c/and* s (for [t (:txns history)] (txn-constraint history s t))))
+  [history]
+  (c/and* (for [t (:txns history)] (txn-constraint history t))))
 
 (defn distinct-constraint
   "Given a history and a constraint system, generates a constraint which
   demands all transaction identifiers are unique."
-  [history s]
+  [history]
   (->> history
        :txns
-       (map (comp (partial tiv s) :i))
-       (c/distinct s)))
+       (map (comp tiv :i))
+       (c/distinct)))
 
 (defn index-constraints
   "Given a history and a constraint system, generates a constraint declaring
   all transaction index variables to be integers from 0 to n."
-  [history s]
+  [history]
   (->> history
        :txns
        (map (fn [txn]
-             (c/in s (tiv s (:i txn)) 0 (dec (count (:txns history))))))
-       (c/and* s)))
+             (c/in (tiv (:i txn)) 0 (dec (count (:txns history))))))
+       (c/and*)))
 
 (defn history-constraint
   "Given a history and a constraint system, constructs a constraint ensuring
   the history is serializable."
-  [history s]
+  [history]
   (c/simplify
-    (c/and* s [(index-constraints history s)
-               (distinct-constraint history s)
-               (txn-constraints history s)])))
+    (c/and* [(index-constraints history)
+               (distinct-constraint history)
+               (txn-constraints history)])))
 
 (defn check-ext-history
   "Check history for external consistency."
   [history s]
-  (let [constraint (history-constraint history (c/clojure))
+  (let [constraint (history-constraint history)
         soln       (c/solution s constraint)]
     ; Map solution back to history
     (if soln
       (assoc history :solution
              (let [var-order    (map key (sort-by val soln))
                    txns-by-vars (->> (:txns history)
-                                     (map (fn [txn] [(tiv (c/clojure) (:i txn)) txn]))
+                                     (map (fn [txn] [(tiv (:i txn)) txn]))
                                      (into {}))]
                (map txns-by-vars var-order)))
       (assoc history :error {:type :no-ext-solution}))))

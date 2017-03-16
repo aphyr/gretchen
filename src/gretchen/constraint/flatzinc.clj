@@ -10,7 +10,7 @@
   (:import (java.io File
                     BufferedReader
                     StringReader)
-           (gretchen.constraint Solution)
+           (gretchen.constraint Solver)
            (java.util.function BinaryOperator)
            (io.lacuna.bifurcan LinearMap)))
 
@@ -321,6 +321,6 @@
 (defn flatzinc
   "Flatzinc gecode based solver."
   []
-  (reify Solution
+  (reify Solver
     (solution [_ c]
       (solution c))))

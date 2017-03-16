@@ -12,14 +12,13 @@
 (definterface+ Solver
   (solution [s c]))
 
-(defn <  [s a b] (less_than s a b))
-(defn <= [s a b] (less_than_equal_to s a b))
-
 (defn t         []            true)
 (defn f         []            false)
 (defn v         [v]           (keyword (str v)))
 (defn and       [& as]        (vec (cons 'and as)))
 (defn or        [& as]        (vec (cons 'or as)))
+(defn and*      [as]          (vec (cons 'and as)))
+(defn or*       [as]          (vec (cons 'or as)))
 (defn not       [a]           ['not a])
 (defn <         [a b]         ['< a b])
 (defn <=        [a b]         ['<= a b])

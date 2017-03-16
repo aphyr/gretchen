@@ -12,7 +12,7 @@
   (->> (vals
          ; We build up a map of nodes to the set of all nodes reachable from
          ; that node.
-         (reduce (fn [m vertex]
+         (reduce (fn red [m vertex]
                    (let [local (set (cons vertex (neighbors vertex)))
                          unified (->> local
                                       (map m)
