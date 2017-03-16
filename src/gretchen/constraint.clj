@@ -1,108 +1,31 @@
-(ns regina.constraint
+(ns gretchen.constraint
   "Polymorphic interface for constraint generation."
   (:require [potemkin :refer [definterface+]]
             [clojure.core :as c]
             [clojure.pprint :refer [pprint]]
             [clojure.walk :as walk]
             [loco.constraints :as loco]
-            [loco.core])
+            [loco.core]
+            [gretchen.util :refer [fixed-point]])
   (:refer-clojure :exclude [t and or not < <= distinct type]))
 
-(definterface+ Constraint
-  (t                  [s])        ; true
-  (f                  [s])        ; false
-  (v                  [s i])      ; variable i
-  (ands               [s as])     ; and
-  (ors                [s as])     ; or
-  (not                [s a])      ; not
-  (less_than          [s a b])    ; <
-  (less_than_equal_to [s a b])    ; <=
-  (bool               [s v])      ; v is a boolean var
-  (in                 [s v min max]) ; v is an integer between min and max
-  (distinct           [s vs]))    ; vs are distinct integers
-
-(definterface+ Solution
+(definterface+ Solver
   (solution [s c]))
-
-(defn and
-  [s & as]
-  (ands s as))
-
-(defn or
-  [s & as]
-  (ors s as))
-
-(defn and*
-  [s as]
-  (ands s as))
-
-(defn or*
-  [s as]
-  (ors s as))
 
 (defn <  [s a b] (less_than s a b))
 (defn <= [s a b] (less_than_equal_to s a b))
 
-(defn loco
-  "Expresses constraints as loco structures."
-  []
-  (reify Constraint
-    (t          [s]     (loco/$true))
-    (f          [s]     (loco/$false))
-    (v          [s i]   (keyword (str i)))
-    (ands       [s as]  (apply loco/$and as))
-    (ors        [s as]  (apply loco/$or as))
-    (not        [s a]   (loco/$not a))
-    (less_than          [s a b] (loco/$< a b))
-    (less_than_equal_to [s a b] (loco/$<= a b))
-    (bool               [s v]   (loco/$in v [0 1]))
-    (in                 [s v min max] (loco/$in v min max))
-    (distinct           [s vs] (loco/$distinct vs))
-
-    Solution
-    (solution [s c]
-      ; Break apart top-level and
-      (assert (= :and (:type c))
-              (str "Don't know how to solve constraint which is not an :and\n\n"
-                   (with-out-str (pprint c))))
-      (pprint c)
-      (loco.core/solution (vec (:constraints c))))))
-
-(defn clojure
-  "Expresses constraints as clojure data structures."
-  []
-  (reify Constraint
-    (t    [s]     true)
-    (f    [s]     false)
-    (v    [s i]   (keyword (str i)))
-    (ands [s as]  (vec (cons 'and as)))
-    (ors  [s as]  (vec (cons 'or as)))
-    (not  [s a]   ['not a])
-    (less_than          [s a b] ['< a b])
-    (less_than_equal_to [s a b] ['<= a b])
-    (bool               [s v]         ['bool v])
-    (in                 [s v min max] ['in v min max])
-    (distinct           [s vs]        (vec (cons 'distinct vs)))))
-
-(defn clojure->
-  "Convert a clojure constraint c to the given constraint system s."
-  [s c]
-  (cond
-    (= true c)   (t s)
-    (= false c)  (f s)
-    (keyword? c) (v s (name c))
-    (sequential? c) (let [[type & children] c
-                   [child :as children] (map (partial clojure-> s) children)]
-               (condp = type
-                 'and  (ands s children)
-                 'or   (ors s children)
-                 'not  (not s child)
-                 '<    (apply < s children)
-                 '<=   (apply <= s children)
-                 'bool (apply bool s children)
-                 'in   (apply in s children)
-                 'distinct (distinct s children)))
-    :else c))
+(defn t         []            true)
+(defn f         []            false)
+(defn v         [v]           (keyword (str v)))
+(defn and       [& as]        (vec (cons 'and as)))
+(defn or        [& as]        (vec (cons 'or as)))
+(defn not       [a]           ['not a])
+(defn <         [a b]         ['< a b])
+(defn <=        [a b]         ['<= a b])
+(defn bool      [v]           ['bool v])
+(defn in        [v min max]   ['in v min max])
+(defn distinct  [vs]          (vec (cons 'distinct vs)))
 
 (defn unfurl-binary-operators
   "Takes a Clojure tree and unfurls n-arity relations to binary form."
@@ -182,19 +105,6 @@
 
         ; All other node types are unoptimized
         c))))
-
-(defn fixed-point
-  "Applies f repeatedly to x until it converges."
-  [f x]
-  (let [x' (f x)]
-;    (println "simplified\n")
-;    (pprint x)
-;    (println "\nto\n")
-;    (pprint x')
-;    (prn)
-    (if (= x x')
-      x
-      (recur f x'))))
 
 (defn simplify
   "Simplify-1 until done."

@@ -1,4 +1,4 @@
-(ns regina.gen
+(ns gretchen.gen
   "Generates histories for testing.")
 
 (defn rand-key

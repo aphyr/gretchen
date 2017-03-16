@@ -1,4 +1,4 @@
-(ns regina.constraint-test
+(ns gretchen.constraint-test
   (:require [clojure.test :refer :all]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -10,7 +10,7 @@
             [clojure.set :as set]
             [clojure.math.numeric-tower :refer [expt]]
             [clojure.pprint :refer [pprint]]
-            [regina.constraint :as c :refer [simplify
+            [gretchen.constraint :as c :refer [simplify
                                              tseitin]]))
 
 (def n 100) ; test.spec iters

@@ -1,4 +1,4 @@
-(ns regina.constraint.flatzinc-test
+(ns gretchen.constraint.flatzinc-test
   (:require [clojure.test :refer :all]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -8,8 +8,8 @@
             [clojure.set :as set]
             [clojure.math.numeric-tower :refer [expt]]
             [clojure.pprint :refer [pprint]]
-            [regina.constraint-test :as ct]
-            [regina.constraint.flatzinc :refer :all]))
+            [gretchen.constraint-test :as ct]
+            [gretchen.constraint.flatzinc :refer :all]))
 
 (def n 100) ; test.spec iters
 

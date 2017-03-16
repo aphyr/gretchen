@@ -1,16 +1,16 @@
-(ns regina.constraint.flatzinc
+(ns gretchen.constraint.flatzinc
   "Evaluates constraints by compiling them to flatzinc and running that against
   gecode, via the fzn-gecode binary that ships with flatzinc. You'll need
   fzn-gecode on your path for this to work. On Debian, you can apt-get install
   flatzinc for this."
-  (:require [regina.constraint :as c]
+  (:require [gretchen.constraint :as c]
             [clojure.java.shell :refer [sh]]
             [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]])
   (:import (java.io File
                     BufferedReader
                     StringReader)
-           (regina.constraint Solution)
+           (gretchen.constraint Solution)
            (java.util.function BinaryOperator)
            (io.lacuna.bifurcan LinearMap)))
 
@@ -290,7 +290,7 @@
 (defn solve
   "Solves a constraint with flatzinc by shelling out. Emits up to n solutions."
   [tree n]
-  (let [file (java.io.File/createTempFile "regina" ".flatzinc")]
+  (let [file (java.io.File/createTempFile "gretchen" ".flatzinc")]
     (try
 ;      (println "flatzinc:")
 ;      (write-flatzinc! *out* tree)

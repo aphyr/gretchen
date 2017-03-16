@@ -1,4 +1,4 @@
-(ns regina.core
+(ns gretchen.core
   "In 'A Framework for Transactional Consistency Models with Atomic
   Visibility', Cerone, Bernardi, and Gotsman present a formal model for
   transactions composed of ordered reads and writes on a set of registers.
@@ -88,7 +88,7 @@
   us with a legal serialization of the history."
   (:require [clojure.string :as str]
             [clojure.pprint :refer [pprint]]
-            [regina.constraint :as c]))
+            [gretchen.constraint :as c]))
 
 ;; Formatting
 

@@ -1,10 +1,10 @@
-(ns regina.core-test
+(ns gretchen.core-test
   (:require [clojure.test :refer :all]
             [clojure.pprint :refer [pprint]]
-            [regina.core :refer :all]
-            [regina.constraint :as c]
-            [regina.constraint.flatzinc :refer [flatzinc]]
-            [regina.gen :as gen :refer [t r w]]
+            [gretchen.core :refer :all]
+            [gretchen.constraint :as c]
+            [gretchen.constraint.flatzinc :refer [flatzinc]]
+            [gretchen.gen :as gen :refer [t r w]]
             [loco.core :as loco]))
 
 (deftest history-test
