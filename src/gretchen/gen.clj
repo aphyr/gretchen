@@ -1,9 +1,13 @@
 (ns gretchen.gen
   "Generates histories for testing.")
 
+(def epoch-key
+  "A key used as a monotonic epoch for breaking up large histories."
+  :epoch)
+
 (defn rand-key
   [state]
-  (rand-nth (keys state)))
+  (rand-nth (remove #{epoch-key} (keys state))))
 
 (defn r
   "Shorthand read constructor."
@@ -19,6 +23,18 @@
   "Generate transaction from seq of ops."
   [& ops]
   {:ops ops})
+
+(defn read-epoch-op
+  "Op that reads the current epoch. Returns [state' op]"
+  [state]
+  [state {:f :read, :k epoch-key, :v (get state epoch-key)}])
+
+(defn inc-epoch-op
+  "Op that advances epoch by 1. Takes state, returns [state' op]"
+  [state]
+  (let [epoch (inc (get state epoch-key))]
+    [(assoc state epoch-key epoch)
+     {:f :write, :k epoch-key, :v epoch}]))
 
 (defn read-op
   "Constructs a random read op on state. Returns [state', read-op]"
@@ -42,13 +58,20 @@
 (defn txn
   "Constructs a random transaction on state. Returns [state', txn]."
   [state]
-  (loop [i      (inc (rand-int 4))
-         state  state
-         ops    []]
-    (if (zero? i)
-      [state {:ops ops}]
-      (let [[state' op] (op state)]
-        (recur (dec i) state' (conj ops op))))))
+  (let [[state epoch-read] (read-epoch-op state)
+        [state epoch-write] (if (< (rand) 0.1)
+                               (inc-epoch-op state)
+                               [state nil])
+         ops (if epoch-write
+               [epoch-read epoch-write]
+               [epoch-read])]
+    (loop [i      (inc (rand-int 4))
+           state  state
+           ops    ops]
+      (if (zero? i)
+        [state {:ops ops}]
+        (let [[state' op] (op state)]
+          (recur (dec i) state' (conj ops op)))))))
 
 (defn txns
   "A lazy sequence of transactions on state."
@@ -61,5 +84,7 @@
   "Constructs a history with a lazy sequence of transactions from the given
   state."
   [txn-count state]
-  {:initial state
-   :txns    (take txn-count (txns state))})
+  (assert (not (contains? state epoch-key)))
+  (let [state (assoc state epoch-key 0)]
+    {:initial state
+     :txns    (take txn-count (txns state))}))

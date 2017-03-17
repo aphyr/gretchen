@@ -81,52 +81,30 @@
     (write-constraint! os c)))
 
 (defn mapping
-  "Take a tree, and a variable offset n. Compute [a new index n', a map of terms
-  to temporary variables.] Mapping is a mutable LinearMap for performance."
+  "Take a tree, and a variable offset n. Compute [a new index n', a map of
+  terms to temporary variables.] Mapping is a mutable LinearMap for
+  performance. We don't emit a mapping for the top-level expression."
   [tree n]
   (->> tree
        (tree-seq sequential? next)
        (filter sequential?)
+       (remove #{tree})
        (reduce (fn [[i m] [type & children :as tree]]
                  [(inc i)
                   (.put m tree (keyword (str "_fz" (+ n i))))])
                [0 (LinearMap.)])))
 
-(defn direct-constraint
-  "Compute a sequence of top-level flatzinc constraints from a given constraint
-  expression. Nil if we don't know how to handle this."
-  [tree]
-  (cond ; Plain old boolean
-        (keyword? tree)
-        [[:bool_eq [tree true]]]
-
-        ; An expression we know how to handle directly?
-        (seq tree)
-        (let [[type a b] tree]
-          (condp = type
-            'distinct (for [a (next tree)
-                            b (next tree)
-                            :when (not= a b)]
-                        [:int_ne [a b]])
-            'not (if (keyword? a)
-                   [[:bool_eq [a false]]])
-            '<   [[:int_lt [a b]]]
-            '<=  [[:int_le [a b]]]
-            nil))))
-
 (defn mapping-constraints
   "Generates constraints from a mapping."
   [mapping]
-  (assert (= (distinct (map #(.value %) mapping))
-             (vec (map #(.value %) mapping)))
+  (assert (= (distinct (vals mapping))
+             (vec (vals mapping)))
           (str "Mapping without distinct variable names:\n"
                (with-out-str (pprint mapping))))
-  (map (fn [entry]
-         (let [tree (.key entry)
-               v    (.value entry)
-               [type & args] tree
+  (map (fn [[tree v]]
+         (let [[type & args] tree
                ; Replace child terms with their variables
-               args (map (fn [a] (.get mapping a a)) args)
+               args (map (fn [a] (get mapping a a)) args)
                [a b] args]
            (condp = type
              '<   [:int_lt_reif [a b v] [[:defines_var v]]]
@@ -137,6 +115,43 @@
              true (throw (IllegalArgumentException.
                            (str "What's a " (pr-str tree) "?"))))))
        mapping))
+
+(defn direct-constraint
+  "Compute a sequence of top-level flatzinc constraints from a given constraint
+  expression, and optionally, a mapping of constraint expressions to boolean
+  variables. Nil if we don't know how to emit a top-level constraint for this
+  expression."
+  ([tree]
+   (direct-constraint nil tree))
+  ([mapping tree]
+   (cond ; Plain old boolean
+         (keyword? tree)
+         [[:bool_eq [tree true]]]
+
+         ; An expression we know how to handle directly?
+         (seq tree)
+         (let [[type a b] tree]
+           (condp = type
+             'distinct (for [a (next tree)
+                             b (next tree)
+                             :when (not= a b)]
+                         [:int_ne [a b]])
+             'not (let [a (if (keyword? a) a (get mapping a))]
+                        (when (keyword? a)
+                          [[:bool_eq [a false]]]))
+
+             ; Negation of a term we know how to directly express
+             'or (let [a (if (keyword? a) a (get mapping a))
+                       b (if (keyword? b) b (get mapping b))]
+                   (when (and (keyword? a) (keyword? b))
+                     [[:bool_or [a b true]]]))
+             'and (let [a (if (keyword? a) a (get mapping a))
+                        b (if (keyword? b) b (get mapping b))]
+                    (when (and (keyword? a) (keyword? b))
+                      [[:bool_and [a b true]]]))
+             '<   [[:int_lt [a b]]]
+             '<=  [[:int_le [a b]]]
+             nil)))))
 
 (defn flat
   "We've got a CNF expression like (and o1 o2 ...) where each o could be (or n1
@@ -157,17 +172,17 @@
                                                     (apply [_ a b]
                                                       a)))]))
                              [0 (LinearMap.)])
-                     second)]
-    {:vars (map (fn [entry] ['bool (.value entry)]) mapping)
+                     second
+                     .toMap)]
+    {:vars (map (partial vector 'bool) (vals mapping))
      :constraints (->> ors
                        (mapcat
                          (fn compute-constraints [o]
-                           (or (direct-constraint o)
-                               (direct-constraint (.get mapping o nil))
+                           (or (direct-constraint mapping o)
                                (throw (IllegalStateException.
                                         (str "Don't know how to generate constraint for "
                                              (pr-str o) "\ngiven value "
-                                             (pr-str (.get mapping o nil))
+                                             (pr-str (get mapping o))
                                              " from mapping\n"
                                              (with-out-str
                                                (pprint mapping))
@@ -213,9 +228,9 @@
         ; Flatten the tree and compute constraints
         flattened (flat constraints)]
 
-;    (prn :constraints)
-;    (pprint (:constraints flattened))
-;    (prn)
+    ; (prn :constraints)
+    ; (pprint (:constraints flattened))
+    ; (prn)
 
     ; Write ints
     (doseq [v ints]
@@ -238,7 +253,17 @@
     (.write os "\n")
 
     ; Solve!
-    (.write os "solve satisfy;\n")))
+    ; We take advantage of the fact that our inputs were probably serialized
+    ; in the same order they were submitted to the DB
+    (.write os "solve")
+    (when (seq ints)
+      (.write os " :: int_search([")
+      (->> (map (comp name second) ints)
+           (interpose ", ")
+           (apply str)
+           (.write os))
+      (.write os "], input_order, indomain_split, complete)"))
+    (.write os " satisfy;\n")))
 
 (defn flatzinc-str
   "Converts constraint tree to a flatzinc string."
@@ -292,12 +317,25 @@
   [tree n]
   (let [file (java.io.File/createTempFile "gretchen" ".flatzinc")]
     (try
-;      (println "flatzinc:")
-;      (write-flatzinc! *out* tree)
+;      (prn)
+;      (println "-------------------------------")
+;      (println "tree:")
+;      (pprint tree)
+
       (with-open [w (io/writer file)]
         (write-flatzinc! w tree))
 
-      (let [res (sh "fzn-gecode" "-n" (str n) "-p" "0" (.getCanonicalPath file))]
+;      (prn)
+;      (println "flatzinc:")
+;      (println (slurp file))
+      (let [res (sh "fzn-gecode"
+                    "-n" (str n)
+                    "-p" "0"
+                    ; I thiiiink we can't prove nonexistence if we let it
+                    ; restart. It'll definitely spit out solutions forever if
+                    ; unlimited.
+                    ; "-restart" (if (= 0 n) "none" "luby")
+                    (.getCanonicalPath file))]
         (assert (zero? (:exit res))
                 (str "fzn-gecode returned non-zero exit status " (:exit res)
                      ".\nStderr:\n" (:err res)

@@ -73,7 +73,8 @@
              (:error (check {:initial init :txns [t1 t2]} (flatzinc))))))))
 
 (deftest perf-test
-  (let [h (gen/history 50 {:x 0 :y 0 :z 0})]
+  (let [h (gen/history 150 {:x 0 :y 0 :z 0})]
+    (pprint h)
     (prn)
     (println "---------------------------------------------")
     (prn)

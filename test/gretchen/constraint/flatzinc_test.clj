@@ -27,7 +27,7 @@
               "\n\n\n"
               "constraint int_lt(a, b);\n"
               "\n"
-              "solve satisfy;\n")
+              "solve :: int_search([a, b], input_order, indomain_split, complete) satisfy;\n")
          (flatzinc-str '(and (in :a 0 2)
                              (in :b 0 2)
                              (< :a :b)))))
@@ -37,19 +37,18 @@
               "\n\n"
               "var bool: _fz0 :: var_is_introduced :: is_defined_var;\n"
               "var bool: _fz1 :: var_is_introduced :: is_defined_var;\n"
-              "var bool: _fz2 :: var_is_introduced :: is_defined_var;\n"
               "\n"
-              "constraint bool_or(_fz1, _fz2, _fz0) :: defines_var(_fz0);\n"
-              "constraint int_lt_reif(a, b, _fz1) :: defines_var(_fz1);\n"
-              "constraint int_lt_reif(b, a, _fz2) :: defines_var(_fz2);\n"
-              "constraint bool_eq(_fz0, true);\n"
+              "constraint int_lt_reif(a, b, _fz0) :: defines_var(_fz0);\n"
+              "constraint int_lt_reif(b, a, _fz1) :: defines_var(_fz1);\n"
+              "constraint bool_or(_fz0, _fz1, true);\n"
               "\n"
-              "solve satisfy;\n")
+              "solve :: int_search([a, b], input_order, indomain_split, complete) "
+              "satisfy;\n")
          (flatzinc-str '(and (in :a 0 2)
                              (in :b 0 2)
                              (or (< :a :b)
-                                 (< :b :a))))))
-
+                                 (< :b :a)))))))
+(deftest solutions-test
   (is (= #{{:a 0 :b 1}
            {:a 0 :b 2}
            {:a 1 :b 2}
