@@ -75,7 +75,8 @@
             (when-let [more (next a)]
               (.write os ", ")
               (recur more))))
-        (.write os ")"))))
+        (.write os ")"))
+      (recur (next anns))))
 
   (.write os ";\n"))
 
