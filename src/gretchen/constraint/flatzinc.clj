@@ -49,9 +49,14 @@
   (.write os "(")
   (loop [args args]
     (.write os (let [a (first args)]
-                 (if (keyword? a)
-                   (name (first args))
-                   (pr-str a))))
+                 (cond (string? a)
+                       a
+
+                       (keyword? a)
+                       (name (first args))
+
+                       :else
+                       (pr-str a))))
     (when-let [more (next args)]
       (.write os ", ")
       (recur more)))
@@ -132,10 +137,15 @@
          (seq tree)
          (let [[type a b] tree]
            (condp = type
-             'distinct (for [a (next tree)
-                             b (next tree)
-                             :when (not= a b)]
-                         [:int_ne [a b]])
+             'distinct [[:all_different_int
+                         [(str "["
+                               (apply str
+                                      (interpose ", " (map name (next tree))))
+                               "]")]]]
+                       ;(for [a (next tree)
+                       ;      b (next tree)
+                       ;      :when (not= a b)]
+                       ;  [:int_ne [a b]])
              'not (let [a (if (keyword? a) a (get mapping a))]
                         (when (keyword? a)
                           [[:bool_eq [a false]]]))
@@ -232,6 +242,9 @@
     ; (pprint (:constraints flattened))
     ; (prn)
 
+    ; Predicates
+    (.write os "predicate all_different_int(array[int] of var int: x);\n\n")
+
     ; Write ints
     (doseq [v ints]
       (write-int! os v))
@@ -312,6 +325,18 @@
       line-seq
       (parse-solutions)))
 
+(defn error-report!
+  [res tree]
+  (let [file (File/createTempFile "gretchen-crash" ".flatzinc")]
+    (with-open [w (io/writer file)]
+      (write-flatzinc! w tree))
+    (str "Constraint tree was\n" (with-out-str (pprint tree))
+         "\nGenerated flatzinc was:\n" (flatzinc-str tree)
+         "\nfzn-gecode returned non-zero exit status " (:exit res)
+         ".\nStderr:\n" (:err res)
+         "\nStdout:\n" (:out res)
+         "\nFlatzinc available in " (.getCanonicalPath file))))
+
 (defn solve
   "Solves a constraint with flatzinc by shelling out. Emits up to n solutions."
   [tree n]
@@ -336,13 +361,8 @@
                     ; unlimited.
                     ; "-restart" (if (= 0 n) "none" "luby")
                     (.getCanonicalPath file))]
-        (assert (zero? (:exit res))
-                (str "fzn-gecode returned non-zero exit status " (:exit res)
-                     ".\nStderr:\n" (:err res)
-                     "\nStdout:\n" (:out res)
-                     "\nConstraint tree was\n" (with-out-str (pprint tree))
-                     "\nGenerated flatzinc was:\n" (flatzinc-str tree)))
-             (parse-solutions-str (:out res)))
+        (assert (zero? (:exit res)) (error-report! res tree))
+        (parse-solutions-str (:out res)))
       (finally
         (.delete file)))))
 

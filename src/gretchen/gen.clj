@@ -88,3 +88,8 @@
   (let [state (assoc state epoch-key 0)]
     {:initial state
      :txns    (take txn-count (txns state))}))
+
+(defn shuffle-history
+  "A history with shuffled transactions."
+  [txn-count state]
+  (update (history txn-count state) :txns shuffle))
