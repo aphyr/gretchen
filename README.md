@@ -61,7 +61,7 @@ value)` for a read, and `(w key value)` for a write.
 
 ```clj
 user=> (require '[gretchen.gen :refer [t r w]])
-user=> (t (:w :x 0) (r :y 1))
+user=> (t (w :x 0) (r :y 1))
 {:ops (0 {:f :read :k :y :v 1})}
 ```
 
