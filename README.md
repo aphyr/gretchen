@@ -137,7 +137,7 @@ user=> (g/check {:txns [(t (w :x 1) (r :x 2))]}
  ...}
 ```
 
-Or a external consistency errors. For instance, a lost update, where two
+Or external consistency errors. For instance, a lost update, where two
 transactions both compare-and-set 0 to 1:
 
 ```clj
@@ -150,8 +150,8 @@ user=> (g/check {:initial {:x 0}
   :ext-writes {:x {0 (0) 1 (2 1)}}
   :initial {:x 0}
   :txns ({:i 0 :ops ({:f :write :k :x :v 0})}
-      {:i 1 :ops ({:f :read :k :x :v 0} {:f :write :k :x :v 1})}
-      {:i 2 :ops ({:f :read :k :x :v 0} {:f :write :k :x :v 1})})}
+         {:i 1 :ops ({:f :read :k :x :v 0} {:f :write :k :x :v 1})}
+         {:i 2 :ops ({:f :read :k :x :v 0} {:f :write :k :x :v 1})})}
 ```
 
 Or read skew, in which a transaction overwrites values between another
