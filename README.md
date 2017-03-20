@@ -8,7 +8,7 @@ Gretchen takes a history: a collection of transactions of reads or writes over
 a set of named registers, and determines whether that history is
 *serializable*: informally, whether there exists some sequential execution of
 those transactions with equivalent effects. We adapt [Cerone, Bernardi, and
-Gotsman's formulation of tranasctional consistency
+Gotsman's formulation of transactional consistency
 models](http://drops.dagstuhl.de/opus/volltexte/2015/5375/pdf/15.pdf),
 decomposing serializability into internal and external consistency, plus a
 total visibility order, and verify external consistency by solving a constraint
