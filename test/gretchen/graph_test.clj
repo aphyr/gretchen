@@ -9,7 +9,7 @@
             [gretchen.graph :refer :all]
             [gretchen.util :refer :all]))
 
-(def n 1e3) ; test.spec iters
+(def n 1e2) ; test.spec iters
 
 (def gen-vertices (gen/set gen/pos-int))
 
@@ -31,6 +31,37 @@
             (fn [vertices]
               (gen/hash-map :vertices (gen/return vertices)
                             :neighbors (gen-neighbors vertices)))))
+
+(deftest reachable-test
+  (is (= #{} (reachable {:vertices [1 2]
+                        :neighbors {1 2}}
+                       [])))
+  (is (= #{1} (reachable {:vertices [1 2]
+                          :neighbors {2 1 1 1}}
+                         [1])))
+
+  (is (= #{1 2 3 4} (reachable {:vertices [1 2 3 4 5]
+                                :neighbors {2 3 3 4}}
+                               [1 2]))))
+
+(defspec invert-spec
+  n
+  (prop/for-all [g gen-graph]
+                (let [i (invert g)]
+                  (and (= (:vertices g)
+                          (:vertices i))
+                       (let [gn (->> (:neighbors g)
+                                     (map (juxt key (comp set val)))
+                                     (into {}))
+                             in (->> (:neighbors i)
+                                     (map (juxt key (comp set val)))
+                                     (into {}))]
+                       (every? true?
+                               (for [a (:vertices g)
+                                     b (:vertices g)]
+                                 ; Iff a->b in g, b->a in i.
+                                 (= (contains? (gn a) b)
+                                    (contains? (in b) a)))))))))
 
 (defn partition?
   "Do the given subgraphs form a total partition of the elements of universe?"
