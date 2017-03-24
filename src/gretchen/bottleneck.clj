@@ -22,7 +22,7 @@
   |             | | |           |
       /-a1--a3\       /-b0--b2
     a0         ---c---
-      \-a2--a4/       \-b1
+      |-a2--a4/       |-b1
 
   To abuse notation, since A < c < B, then A < B. This implies that no
   transactions in B can affect the serializability of A. This gives us two

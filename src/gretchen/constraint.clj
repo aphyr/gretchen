@@ -39,6 +39,7 @@
                      tree))
                  tree))
 
+
 (defn simplify-1
   "Simplify a Clojure constraint, in one pass."
   [c]
@@ -105,10 +106,38 @@
         ; All other node types are unoptimized
         c))))
 
-(defn simplify
-  "Simplify-1 until done."
+(defn common-subexpressions
+  "Identifies subexpressions which must be true in all branches of an
+  expression."
   [c]
-  (fixed-point simplify-1 c))
+  (if-not (sequential? c)
+    #{c}
+    (let [[type & children] c]
+      (condp = type
+        'and (reduce set/union (map simplify-cse-helper children))
+        'or  (if (seq children)
+               (reduce set/intersection (map simplify-cse-helper children))
+               #{})
+        #{c}))))
+
+(defn simplify-cse
+  "Simplify a Clojure constraint by eliminating common subexpressions, moving
+  them to a top-level 'and."
+  [c]
+  (let [common (common-subexpressions c)]
+    (if-not (seq common)
+      c ; Nothing to eliminate
+      (vec (into ['and (postwalk-replace
+                         (fn rep [c] (or (contains? common c) c)) c)]
+                 common)))))
+
+(defn simplify
+  "Simplify-1 until done, then perform common subexpression elimination."
+  [c]
+  (->> c
+       (fixed-point simplify-1)
+       simplify-cse
+       (fixed-point simplify-1)))
 
 (defn cnf-literal?
   "Is the given Clojure constraint tree a CNF literal? In our case, we want to
