@@ -5,6 +5,7 @@
             [clojure.pprint :refer [pprint]]
             [clojure.walk :as walk]
             [loco.constraints :as loco]
+            [clojure.set :as set]
             [loco.core]
             [gretchen.util :refer [fixed-point]])
   (:refer-clojure :exclude [t and or not < <= distinct type]))
@@ -114,9 +115,9 @@
     #{c}
     (let [[type & children] c]
       (condp = type
-        'and (reduce set/union (map simplify-cse-helper children))
+        'and (reduce set/union (map common-subexpressions children))
         'or  (if (seq children)
-               (reduce set/intersection (map simplify-cse-helper children))
+               (reduce set/intersection (map common-subexpressions children))
                #{})
         #{c}))))
 
@@ -127,16 +128,16 @@
   (let [common (common-subexpressions c)]
     (if-not (seq common)
       c ; Nothing to eliminate
-      (vec (into ['and (postwalk-replace
+      (vec (into ['and (walk/postwalk-replace
                          (fn rep [c] (or (contains? common c) c)) c)]
                  common)))))
 
 (defn simplify
-  "Simplify-1 until done, then perform common subexpression elimination."
+  "Simplify-1 until done."
   [c]
   (->> c
-       (fixed-point simplify-1)
-       simplify-cse
+;       (fixed-point simplify-1)
+;       simplify-cse
        (fixed-point simplify-1)))
 
 (defn cnf-literal?

@@ -115,13 +115,13 @@
 
                 ; Compute a conjunction of disjunctions of dependency txn ids.
                 (let [writes (->> (ext-reads txn)
-                                  (keep (fn [[k v]])
-                                        (->> (-> ext-writes (get k) (get v))
-                                             (keep (fn [i]
-                                                     ; Don't depend on self
-                                                     (when (not= i (:i txn))
-                                                       ; Map ids back to txns
-                                                       (nth txns i)))))))
+                                  (keep (fn [[k v]]
+                                          (->> (-> ext-writes (get k) (get v))
+                                               (keep (fn [i]
+                                                       ; Don't depend on self
+                                                       (when (not= i (:i txn))
+                                                         ; Map ids back to txns
+                                                         (nth txns i))))))))
                       ; Do we still need to visit any of these?
                       needed (remove graph (flatten writes))]
                   (if (seq needed)

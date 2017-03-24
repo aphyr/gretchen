@@ -15,7 +15,13 @@
 
 (declare to-set)
 
+(definterface+ Node
+  (xs [node]))
+
 (deftype Union [xs max-count]
+  Node
+  (xs [_] xs)
+
   Seqable
   (seq [this] (seq (to-set this)))
 
@@ -23,6 +29,9 @@
   (toString [this] (str "(∪ " (apply str (interpose " " xs)) ")")))
 
 (deftype Intersection [xs max-count]
+  Node
+  (xs [_] xs)
+
   Seqable
   (seq [this] (seq (to-set this)))
 
@@ -96,7 +105,7 @@
   (if-not (or (identical? (class coll) Union)
               (identical? (class coll) Intersection))
     (set coll)
-    (let [stack (ArrayList. (list coll))]
+    (let [stack (ArrayList. ^java.util.List (list coll))]
       (loop []
         ; (prn :stack (reverse stack))
         (let [size (.size stack)]
@@ -108,7 +117,7 @@
                       (identical? op Intersection))
                 ; Single unrealized node; expand
                 (do (.clear stack)
-                    (.addAll stack (interpose op (.xs a)))
+                    (.addAll stack (interpose op (.xs ^Node a)))
                     (recur))
                 ; Realized, we're done!
                 a))
@@ -122,7 +131,7 @@
                     (or (identical? (class a) Union)
                         (identical? (class a) Intersection))
                     (do (.remove stack (int (- size 1)))
-                        (.addAll stack (interpose (class a) (.xs a)))
+                        (.addAll stack (interpose (class a) (.xs ^Node a)))
                         (recur))
 
                     ; We've got a but not b; swap

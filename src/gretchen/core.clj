@@ -209,7 +209,7 @@
   "Given a history, a constraint system, and transaction, constructs a
   constraint ensuring the transaction's external consistency."
   [history txn]
-  (c/and* (for [r (ext-reads txn)]
+  (c/and* (for [r (h/ext-reads txn)]
               (prior-constraint history txn r))))
 
 (defn txn-constraints
