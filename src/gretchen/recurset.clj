@@ -13,6 +13,12 @@
   (:import (java.util ArrayList)
            (clojure.lang Seqable)))
 
+(def eager-max-count-limit
+  "When you call union or intersection, we may perform that set operation
+  immediately, rather than creating an indirect node. This is the upper bound
+  on a set we'll realize eagerly."
+  64)
+
 (declare to-set)
 
 (definterface+ Node
@@ -64,24 +70,6 @@
     coll
     (set coll)))
 
-(defn union
-  "Constructs a set representing the union of the given sets."
-  [sets]
-  (condp = (count sets)
-    0 #{}
-    1 (prepare (first sets))
-    (Union. (sort-by (comp - max-count) (map prepare sets))
-            (reduce + (map max-count sets)))))
-
-(defn intersection
-  "Constructs a set representing the intersection of the given sets."
-  [sets]
-  (condp = (count sets)
-    0 (throw (IllegalArgumentException. "Can't intersect 0 sets"))
-    1 (prepare (first sets))
-    (Intersection. (sort-by (comp - max-count) (map prepare sets))
-                   (reduce min (map max-count sets)))))
-
 (defn to-set
   [coll]
   ; We build a stack machine where the stack is of the form
@@ -102,6 +90,8 @@
   ;
   ; For performance reasons, our stack is an arraylist and is backwards--so the
   ; first element of the stack has index (dec (count stack)).
+  ;
+  ; Todo: use bifurcan LinearSet.
   (if-not (or (identical? (class coll) Union)
               (identical? (class coll) Intersection))
     (set coll)
@@ -150,3 +140,29 @@
                                 (set/union a b)
                                 (set/intersection a b)))
                         (recur))))))))))
+
+(defn union
+  "Constructs a set representing the union of the given sets."
+  [sets]
+  (condp = (count sets)
+    0 #{}
+    1 (prepare (first sets))
+    (let [max-count' (reduce + (map max-count sets))]
+      (if (<= max-count' eager-max-count-limit)
+        ; Realize eagerly
+        (apply set/union (map to-set sets))
+        ; Create a lazy node
+        (Union. (sort-by (comp - max-count) (map prepare sets))
+                max-count')))))
+
+(defn intersection
+  "Constructs a set representing the intersection of the given sets."
+  [sets]
+  (condp = (count sets)
+    0 (throw (IllegalArgumentException. "Can't intersect 0 sets"))
+    1 (prepare (first sets))
+    (let [max-count' (reduce min (map max-count sets))]
+      (if (<= max-count' eager-max-count-limit)
+        (apply set/intersection (map to-set sets))
+        (Intersection. (sort-by (comp - max-count) (map prepare sets))
+                       max-count')))))

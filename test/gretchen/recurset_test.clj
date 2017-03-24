@@ -32,18 +32,19 @@
 
 (defspec set-spec
   n
-  (prop/for-all [ast gen-ast]
-                (let [clj-soln (try (evaluate ast)
-                          (catch clojure.lang.ArityException e
-                            :universe))
-                      our-soln (try (to-set (build ast))
-                                    (catch IllegalArgumentException e
-                                      (if (= (.getMessage e)
-                                             "Can't intersect 0 sets")
-                                        :universe
-                                        (throw e))))]
-                  (or (= clj-soln our-soln)
-                      (prn)
-                      (pprint ast)
-                      (prn :clojures clj-soln)
-                      (prn :recurset our-soln)))))
+  (with-redefs [eager-max-count-limit 4]
+    (prop/for-all [ast gen-ast]
+                  (let [clj-soln (try (evaluate ast)
+                                      (catch clojure.lang.ArityException e
+                                        :universe))
+                        our-soln (try (to-set (build ast))
+                                      (catch IllegalArgumentException e
+                                        (if (= (.getMessage e)
+                                               "Can't intersect 0 sets")
+                                          :universe
+                                          (throw e))))]
+                    (or (= clj-soln our-soln)
+                        (prn)
+                        (pprint ast)
+                        (prn :clojures clj-soln)
+                        (prn :recurset our-soln))))))
