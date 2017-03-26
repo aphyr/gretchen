@@ -22,7 +22,7 @@
 (defn t
   "Generate transaction from seq of ops."
   [& ops]
-  {:ops ops})
+  {:ops (vec ops)})
 
 (defn read-epoch-op
   "Op that reads the current epoch. Returns [state' op]"

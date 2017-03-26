@@ -1,7 +1,8 @@
 (ns gretchen.history
   "Basic operations over transactions and histories."
   (:refer-clojure :exclude [ancestors descendants])
-  (:require [clojure.set :as set]))
+  (:require [gretchen.recurset :as recurset]
+            [clojure.set :as set]))
 
 (defn ext-reads
   "Given a transaction, returns the map of keys to values for its external
@@ -40,7 +41,7 @@
   "Takes a history and adds ids :i = 0...n to its transactions."
   [history]
   (->> (:txns history)
-       (map-indexed (fn [i txn] (assoc txn :i i)))
+       (mapv (fn [i txn] (assoc txn :i i)) (range))
        (assoc history :txns)))
 
 (defn ext-index
@@ -80,14 +81,13 @@
   "Builds a partial transaction precedence graph based on each transaction's
   external reads and writes. THIS GRAPH IS NOT TOTAL: if the graph contains
   a->b, then a must execute after b, but the converse is not necessarily true:
-  some dependencies may not be present.
+  some dependencies may not be present. We only consider happens-before
+  precedence, and don't use information about excluded intervals.
 
-  I can't think of a more efficient way to do this than materializing the
-  *entire* dependency tree, so for e.g. 10k transactions each depending on the
-  previous, we're looking at, I dunno, a gigabyte of memory. Not great but not
-  wholly impractical."
+  That said, for those transactions we *do* prove lie before another, we
+  actually compute the transitive closure."
   [history]
-  ; dep graph: a map of txn ids i to txn ids i definitely depends on.
+  ; dep graph: a map of txns t to a set of txns t definitely depends on.
   ;
   ; We build up the dep graph by visiting every transaction. Where a
   ; transaction has at most one dependency for every external read, we know
@@ -102,16 +102,16 @@
         ; Stack empty; we're done
         graph
 
-        (let [txns (first stack)]
-          (if-not (seq txns)
+        (let [needed-txns (first stack)]
+          (if-not (seq needed-txns)
             ; No more txns at this level; move back up
             (recur (next stack) graph)
 
             ; OK we have a txn. Is it in the graph yet?
-            (let [txn (first txns)]
+            (let [txn (first needed-txns)]
               (if (get graph txn)
                 ; Already computed; move on
-                (recur (cons (next txns) (next stack)) graph)
+                (recur (cons (next needed-txns) (next stack)) graph)
 
                 ; Compute a conjunction of disjunctions of dependency txn ids.
                 (let [writes (->> (ext-reads txn)
@@ -121,37 +121,29 @@
                                                        ; Don't depend on self
                                                        (when (not= i (:i txn))
                                                          ; Map ids back to txns
-                                                         (nth txns i))))))))
+                                                         (nth txns i)))))))
+                                  (filter seq))
                       ; Do we still need to visit any of these?
                       needed (remove graph (flatten writes))]
                   (if (seq needed)
                     ; Hang on, we gotta figure out some dependencies first
                     (recur (cons needed stack) graph)
 
-                    ; OK our dependencies are all figured out. Now let's
-                    ; combine them.
-                    (let [deps (loop [deps #{}
-                                      writes writes]
-                                 (if-not (seq writes)
-                                   ; Done
-                                   deps
-                                   (let [alts (first writes)]
-                                     (condp = (count alts)
-                                       ; No deps for this key
-                                       0 (recur deps (next writes))
+                    ; OK our dependencies are all figured out. Now, we want the
+                    ; intersection of the transitive dependency set for any of
+                    ; our alternative deps...
+                    (let [trans-deps (map (fn [txns]
+                                            (->> txns
+                                                 (map graph)
+                                                 recurset/intersection))
+                                          writes)
+                          ; ... plus those transactions we definitely directly
+                          ; depend on
+                          direct-deps (keep #(when (= 1 (count %))
+                                               (first %))
+                                            writes)
+                          deps (recurset/union (cons direct-deps trans-deps))]
 
-                                       ; Single dep for this key
-                                       1 (recur (->> (first alts)
-                                                     (get graph)
-                                                     (set/union deps))
-                                                (next writes))
-
-                                       ; Multiple deps; take their intersection
-                                       2 (recur (->> deps
-                                                     (map graph)
-                                                     (reduce set/intersection)
-                                                     (set/union deps))
-                                                (next writes))))))]
                       ; Update graph and move to the next thing in the stack
-                      (recur (cons (next txns) (next stack))
+                      (recur (cons (next needed-txns) (next stack))
                              (assoc graph txn deps)))))))))))))

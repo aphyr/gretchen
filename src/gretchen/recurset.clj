@@ -91,7 +91,9 @@
   ; For performance reasons, our stack is an arraylist and is backwards--so the
   ; first element of the stack has index (dec (count stack)).
   ;
-  ; Todo: use bifurcan LinearSet.
+  ; TODO: use bifurcan LinearSet.
+  ; TODO: optimize intersections by skipping elements not present in the
+  ; intersection of all realized sets in the stack
   (if-not (or (identical? (class coll) Union)
               (identical? (class coll) Intersection))
     (set coll)
