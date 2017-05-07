@@ -244,7 +244,6 @@
     ; (prn)
 
     ; Predicates
-    (.write os "predicate all_different_int(array[int] of var int: x);\n\n")
 
     ; Write ints
     (doseq [v ints]

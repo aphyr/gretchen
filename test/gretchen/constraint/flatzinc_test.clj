@@ -60,6 +60,8 @@
                                (or (< :a :b)
                                    (< :b :a))))))))
 
+; TODO: verify that all_different works
+
 (defspec tseitin-spec
   n
   (prop/for-all [e ct/gen-full-expr]

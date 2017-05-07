@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.pprint :refer [pprint]]
             [gretchen.core :refer :all]
+            [gretchen.history :refer [prepare-history]]
             [gretchen.constraint :as c]
             [gretchen.constraint.flatzinc :refer [flatzinc]]
             [gretchen.gen :as gen :refer [t r w]]
