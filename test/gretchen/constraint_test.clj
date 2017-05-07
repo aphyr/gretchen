@@ -4,7 +4,6 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer [defspec]]
-            [clojure.test.check.results :refer [Result]]
             [clojure.walk :refer [postwalk
                                   postwalk-replace]]
             [clojure.set :as set]

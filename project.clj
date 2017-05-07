@@ -8,7 +8,7 @@
                  [io.lacuna/bifurcan "0.1.0-alpha1"]
                  [loco "0.3.1"]]
   :profiles {:dev {:dependencies [[org.clojure/math.numeric-tower "0.0.4"]
-                                  [org.clojure/test.check "0.9.1-SNAPSHOT"]]}}
+                                  [org.clojure/test.check "0.9.0"]]}}
   :jvm-opts ["-Xmx12g"
              "-XX:+UseConcMarkSweepGC"
              "-XX:+UseParNewGC"
