@@ -36,7 +36,9 @@ the total set of transactions which constitute a history.
 
 See `gretchen.core` for an in-depth discussion.
 
-## Usage
+## Installation
+
+We rely on lacuna/bifurcan, which you can build with `lein install`.
 
 You'll need the Flatzinc gecode constraint solver on your path. On Debian, you
 can install it with `sudo apt-get install flatzinc`.
