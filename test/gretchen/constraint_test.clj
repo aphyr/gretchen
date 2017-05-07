@@ -13,6 +13,7 @@
                                              tseitin]]))
 
 (def n 100) ; test.spec iters
+(def expr-complexity-limit "Max number of nodes in full expression generator" 12)
 (def int-vars #{:i :j})
 (def bool-vars #{:a :b})
 
@@ -74,9 +75,10 @@
 
 (def gen-full-expr
   "Both booleans and integers"
-  (->> (gen/recursive-gen gen-compound gen-bool-terminal)
-       (gen/such-that (fn [expr] (< (expr-size expr) 12)))
-       (gen/fmap add-declarations)))
+  (let [g (gen/recursive-gen gen-compound gen-bool-terminal)
+        g (gen/such-that (fn [expr] (< (expr-size expr) expr-complexity-limit))
+                         g 100)]
+    (gen/fmap add-declarations g)))
 
 (def gen-simple-expr
   (gen/fmap simplify gen-full-expr))
