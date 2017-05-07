@@ -13,8 +13,8 @@
                                              tseitin]]))
 
 (def n 100) ; test.spec iters
-(def int-vars #{:i :j :k})
-(def bool-vars #{:a :b :c})
+(def int-vars #{:i :j})
+(def bool-vars #{:a :b})
 
 (defn var-declarations
   "Given a constraint tree, what variable declarations are in it?"
@@ -62,6 +62,11 @@
                        ['bool v]
                        ['in v 0 2]))))))
 
+(defn expr-size
+  "Takes an expression and returns the number of subexpressions in it"
+  [expr]
+  (count (tree-seq sequential? rest expr)))
+
 (def gen-bool-expr
   "Basic boolean expressions"
   (gen/fmap add-declarations
@@ -69,8 +74,9 @@
 
 (def gen-full-expr
   "Both booleans and integers"
-  (gen/fmap add-declarations
-            (gen/recursive-gen gen-compound gen-bool-terminal)))
+  (->> (gen/recursive-gen gen-compound gen-bool-terminal)
+       (gen/such-that (fn [expr] (< (expr-size expr) 12)))
+       (gen/fmap add-declarations)))
 
 (def gen-simple-expr
   (gen/fmap simplify gen-full-expr))
