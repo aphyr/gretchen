@@ -78,16 +78,48 @@
   {c}. A single serialization from A ∪ {c} for each bottleneck state o will
   suffice."
   (:require [clojure.set :as set]
-            [gretchen.util :refer :all]))
+            [gretchen [history :as h]
+                      [recurset :as recurset]
+                      [util :refer :all]]))
 
-(defn bottlenecks
-  "This function takes an augmented history, and returns a map of total and
-  partial bottleneck transactions.
+(defn bottlenecks-
+  "This function takes an augmented history, and returns a collection of
+  bottleneck transactions.
 
-      {:total   [t1, t2, ...]
-       :partial [t3, t4, ...]}
+  We do this by identifying transactions t which have a casual relationship with
+  every other transaction o in the history: either t < o, or o < t."
+  [history]
+  (let [txns (set (:txns history))
+        ; A map of tranactions to recursets of transactions that they depend
+        ; on.
+        ancestors (h/ancestors history)
+        ; A map of transactions to the set of transactions which must depend on
+        ; them.
+        candidates (persistent!
+                     (reduce (fn [candidates [t ancestors-of-t]]
+                               (assoc! candidates t
+                                       (set/difference
+                                         txns
+                                         #{t}
+                                         (recurset/to-set ancestors-of-t))))
+                             (transient {})
+                             ancestors))]
+    (keys
+      (reduce (fn [candidates t]
+                ; For every transaction t...
+                (let [ancestors-of-t (recurset/to-set (get ancestors t))]
+                  (reduce (fn [candidates [candidate required]]
+                            ; For every candidate
+                            (cond ; candidate already has a relationship with t
+                                  (not (required t)) candidates
 
-  We do this by computing the expanded bidirectional precedence graph of every
-  transaction, and identifying transactions which must either precede or follow
-  every other transaction."
-  [history])
+                                  ; candidate is an ancestor of t
+                                  (ancestors-of-t candidate) candidates
+
+                                  ; We can't prove any relationship
+                                  true
+                                  (dissoc candidates candidate)))
+                          candidates
+                          candidates)))
+              candidates
+              txns))))

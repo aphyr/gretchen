@@ -77,7 +77,7 @@
       add-txn-ids
       add-ext-indices))
 
-(defn precedence-graph
+(defn ancestors
   "Builds a partial transaction precedence graph based on each transaction's
   external reads and writes. THIS GRAPH IS NOT TOTAL: if the graph contains
   a->b, then a must execute after b, but the converse is not necessarily true:
@@ -147,3 +147,4 @@
                       ; Update graph and move to the next thing in the stack
                       (recur (cons (next needed-txns) (next stack))
                              (assoc graph txn deps)))))))))))))
+

@@ -1,6 +1,13 @@
 (ns gretchen.util
   "Kitchen sink")
 
+(defn map-vals
+  "Maps values in a map."
+  [f m]
+  (->> m
+       (map (fn [[k v]] [k (f v)]))
+       (into {})))
+
 (defn distinct-identical
   "Like distinct, but only skips elements which are identical to those already
   seen."

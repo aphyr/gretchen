@@ -6,8 +6,9 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.set :as set]
             [clojure.pprint :refer [pprint]]
-            [gretchen.recurset :refer :all]
-            [gretchen.util :refer :all]))
+            [gretchen [gen-test :refer [augmented-history-gen]]
+                      [recurset :refer :all]
+                      [util :refer :all]]))
 
 (def n 1e3) ; test.spec iters
 
