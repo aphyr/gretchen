@@ -71,7 +71,14 @@
           t1 (t (r :x 0) (r :y 0) (w :x 1))
           t2 (t (r :x 0) (r :y 0) (w :y 2))]
       (is (= {:type :no-ext-solution}
-             (:error (check {:initial init :txns [t1 t2]} (flatzinc))))))))
+             (:error (check {:initial init :txns [t1 t2]} (flatzinc)))))))
+
+  (testing "Agreement with naïve checker"
+    (let [init {:x 0, :y 0}
+          t1 (t (r :x 0) (r :y 0) (w :x 1))
+          t2 (t (r :x 0) (r :y 0) (w :y 2))
+          proposed-solution (check {:initial init :txns [t1 t2]} (flatzinc))]
+      (is (= true (legal-order proposed-solution))))))
 
 (deftest perf-test
   (let [h (gen/history 100 {:x 0 :y 0 :z 0})]

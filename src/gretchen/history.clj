@@ -4,6 +4,20 @@
   (:require [gretchen.recurset :as recurset]
             [clojure.set :as set]))
 
+(defn legal-order
+  "Given a history, returns true if the given history's ops can be applied
+  on top of the initial state, in order, without ever reading the wrong thing"
+  [history]
+  (let [solution (:solution history)]
+    ;; for each txn in the solution perform its ops in order and update/check state on writes/reads. if empty --> legal
+    (empty?
+      (->> solution
+           ;; creates a map of operations
+           (map :ops ,,,)
+           ;; reduces that map into a single value
+           (reduce (fn [(=(f k)v)] "more here"))))))
+
+
 (defn ext-reads
   "Given a transaction, returns the map of keys to values for its external
   reads."
