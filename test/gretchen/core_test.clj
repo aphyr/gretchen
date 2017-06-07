@@ -3,6 +3,7 @@
             [clojure.pprint :refer [pprint]]
             [gretchen.core :refer :all]
             [gretchen.history :refer [prepare-history]]
+            [gretchen.history :refer [legal-order]]
             [gretchen.constraint :as c]
             [gretchen.constraint.flatzinc :refer [flatzinc]]
             [gretchen.gen :as gen :refer [t r w]]
@@ -78,7 +79,7 @@
           t1 (t (r :x 0) (r :y 0) (w :x 1))
           t2 (t (r :x 0) (r :y 0) (w :y 2))
           proposed-solution (check {:initial init :txns [t1 t2]} (flatzinc))]
-      (is (= true (legal-order proposed-solution))))))
+      legal-order proposed-solution)))
 
 (deftest perf-test
   (let [h (gen/history 100 {:x 0 :y 0 :z 0})]
